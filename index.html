@@ -210,20 +210,8 @@ function init(){
 // SPAWN SWINGING BLOCK (crane)
 // ================================================================
 function spawnSwinging(){
-    const top=g.tower[g.tower.length-1];
-    // Maintain minimum distance between block and tower top
-    const blockY=Math.max(top.y-BLOCK_H-SWING_GAP, 10);
-    const pivotY=Math.max(4, blockY+BLOCK_H/2-220);
-    const cx=Math.sin(g.craneAngle)*160;
-
     g.swinging={
-        x:W/2+cx-TOWER_W/2,
-        y:blockY,
         w:TOWER_W,h:BLOCK_H,color:nextColor(),
-        pivotX:W/2,
-        pivotY:pivotY,
-        hangX:W/2+cx,
-        hangY:blockY+BLOCK_H/2,
     };
 }
 
@@ -235,9 +223,15 @@ function dropBlock(){
     Sound.init();
     Sound.drop();
     g.state='dropping';
+    // Convert crane screen position to world position
+    const TOWER_TOP_SCREEN_Y=220;
+    const blockSY=TOWER_TOP_SCREEN_Y-SWING_GAP-BLOCK_H;
+    const cx=Math.sin(g.craneAngle)*160;
+    const sx=W/2+cx-TOWER_W/2;
+    const wy=blockSY+g.cameraY;
     g.dropping={
-        x:g.swinging.x,y:g.swinging.y,
-        w:g.swinging.w,h:g.swinging.h,color:g.swinging.color,
+        x:sx,y:wy,
+        w:TOWER_W,h:BLOCK_H,color:g.swinging.color,
     };
     g.swinging=null;
 }
@@ -369,16 +363,10 @@ function showMilestoneTheme(n){const el=document.getElementById('milestonePopup'
 function update(){
     if(g.state==='gameover')return;
 
-    // Crane swing
-    if(g.state==='playing'&&g.swinging){
+    // Crane swing (screen space — visual only)
+    if(g.state==='playing'){
         g.craneAngle+=g.craneSpeed*g.craneDir;
         if(Math.abs(Math.sin(g.craneAngle)*160)>150)g.craneDir*=-1;
-        // Update block position based on crane angle
-        const cx=Math.sin(g.craneAngle)*160;
-        g.swinging.x=W/2+cx-TOWER_W/2;
-        g.swinging.hangX=W/2+cx;
-        // hangY stays at block center (set in spawnSwinging)
-        g.swinging.pivotY=Math.max(4, g.swinging.y+BLOCK_H/2-220);
     }
 
     // Dropping / falling
@@ -402,9 +390,10 @@ function update(){
     g.swayVel=(g.swayVel+springForce)*SWAY_D;
     g.swayAngle+=g.swayVel;
 
-    // Camera
+    // Camera — tower top at fixed screen position
+    const TOWER_TOP_SCREEN_Y=220;
     if(g.tower.length>0){
-        g.targetCamY=Math.max(0,g.tower[g.tower.length-1].y-380);
+        g.targetCamY=g.tower[g.tower.length-1].y-TOWER_TOP_SCREEN_Y;
     }
     g.cameraY=lerp(g.cameraY,g.targetCamY,0.08);
 
@@ -441,9 +430,14 @@ function draw(){
     ctx.save();
     ctx.translate(g.shakeX,g.shakeY);
     drawBackground();
+    // Tower + falling block in world space (camera offset)
+    ctx.save();
+    ctx.translate(0,-g.cameraY);
     drawTower();
-    if(g.swinging)drawCrane();
     if(g.dropping)drawDropping();
+    ctx.restore();
+    // Crane/swinging block in screen space (fixed position)
+    if(g.swinging)drawCrane();
     drawParticles();
     drawTexts();
     drawHUD();
@@ -512,25 +506,23 @@ function drawTower(){
 
 function drawCrane(){
     const s=g.swinging;if(!s)return;
-    const sy=s.y-g.cameraY;
-    const px=s.pivotX,py=s.pivotY-g.cameraY;
-    const hx=s.hangX,hy=s.hangY-g.cameraY;
+    // Block at fixed screen position
+    const TOWER_TOP_SCREEN_Y=220;
+    const blockSY=TOWER_TOP_SCREEN_Y-SWING_GAP-BLOCK_H;
+    const cx=Math.sin(g.craneAngle)*160;
+    const sx=W/2+cx-TOWER_W/2;
+    const sy=blockSY;
 
-    // Crane arm line
+    // Crane arm from top
     ctx.strokeStyle='rgba(255,255,255,0.15)';
     ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(hx,hy);ctx.stroke();
-
-    // Crane pivot dot
-    ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);
+    ctx.beginPath();ctx.moveTo(W/2,4);ctx.lineTo(W/2+cx,sy+BLOCK_H/2);ctx.stroke();
+    // Pivot dot
+    ctx.beginPath();ctx.arc(W/2,4,4,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fill();
 
-    // Crane hook
-    ctx.beginPath();ctx.arc(hx,hy,3,0,Math.PI*2);
-    ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fill();
-
     // Block
-    drawBlock(s,sy);
+    drawBlock({x:sx,y:sy,w:TOWER_W,h:BLOCK_H,color:s.color},sy,false);
 }
 
 function drawDropping(){
