@@ -745,6 +745,11 @@ function drawHUD(){
     ctx.fillStyle='rgba(255,255,255,0.15)';
     ctx.fillText(th.name,W-8,8);
 
+    // Version (bottom-left)
+    ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillStyle='rgba(255,255,255,0.08)';
+    ctx.fillText('v3.0',6,H-4);
+
     // Tap hint (first 2 blocks)
     if(g.score<2&&g.state==='playing'){
         ctx.textAlign='center';
