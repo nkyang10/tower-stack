@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tower Stack</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+    width:100%;height:100%;
+    overflow:hidden;
+    background:#0a0a1a;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+}
+#container{
+    position:relative;
+    width:100%;height:100dvh;
+    max-width:420px;
+    margin:0 auto;
+    overflow:hidden;
+}
+#game{
+    display:block;
+    width:100%;height:100%;
+    cursor:pointer;
+}
+#overlay{
+    position:absolute;
+    top:0;left:0;right:0;bottom:0;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    background:rgba(0,0,0,0.65);
+    -webkit-backdrop-filter:blur(6px);
+    backdrop-filter:blur(6px);
+    z-index:10;
+    opacity:0;
+    transition:opacity 0.5s ease;
+}
+#overlay.visible{
+    display:flex;
+    opacity:1;
+}
+.overlay-content{
+    text-align:center;
+    padding:40px 30px;
+    max-width:320px;
+    width:90%;
+}
+.overlay-content .title{
+    font-size:32px;
+    font-weight:800;
+    color:#fff;
+    letter-spacing:4px;
+    margin-bottom:8px;
+    text-shadow:0 0 30px rgba(255,107,107,0.5);
+}
+.overlay-content .subtitle{
+    font-size:13px;
+    color:rgba(255,255,255,0.5);
+    letter-spacing:6px;
+    text-transform:uppercase;
+    margin-bottom:35px;
+}
+.score-section{
+    margin-bottom:30px;
+}
+.score-section .score-label{
+    font-size:14px;
+    color:rgba(255,255,255,0.5);
+    letter-spacing:3px;
+    text-transform:uppercase;
+    display:block;
+    margin-bottom:6px;
+}
+.score-section .score-value{
+    font-size:72px;
+    font-weight:800;
+    color:#fff;
+    line-height:1;
+    text-shadow:0 0 40px rgba(255,255,255,0.2);
+}
+.best-section{
+    margin-bottom:35px;
+}
+.best-section .best-label{
+    font-size:12px;
+    color:rgba(255,255,255,0.35);
+    letter-spacing:2px;
+    text-transform:uppercase;
+}
+.best-section .best-value{
+    font-size:22px;
+    font-weight:700;
+    color:#FECA57;
+    margin-top:3px;
+}
+.best-badge{
+    display:none;
+    background:linear-gradient(135deg,#FECA57,#f0932b);
+    color:#1a1a2e;
+    font-size:10px;
+    font-weight:800;
+    padding:2px 10px;
+    border-radius:10px;
+    letter-spacing:1px;
+    margin-left:8px;
+    vertical-align:middle;
+}
+#restartBtn{
+    display:inline-block;
+    padding:16px 50px;
+    font-size:18px;
+    font-weight:700;
+    color:#fff;
+    background:linear-gradient(135deg,#FF6B6B,#ee5a24);
+    border:none;
+    border-radius:50px;
+    cursor:pointer;
+    letter-spacing:2px;
+    transition:transform 0.2s,box-shadow 0.2s;
+    box-shadow:0 4px 20px rgba(238,90,36,0.4);
+    outline:none;
+    -webkit-tap-highlight-color:transparent;
+}
+#restartBtn:hover{
+    transform:translateY(-2px);
+    box-shadow:0 6px 30px rgba(238,90,36,0.6);
+}
+#restartBtn:active{
+    transform:translateY(0) scale(0.97);
+}
+</style>
+</head>
+<body>
+<div id="container">
+    <canvas id="game"></canvas>
+    <div id="overlay">
+        <div class="overlay-content">
+            <div class="title">TOWER<br>STACK</div>
+            <div class="subtitle">Build the tallest tower</div>
+            <div class="score-section">
+                <span class="score-label">SCORE</span>
+                <span class="score-value" id="finalScore">0</span>
+            </div>
+            <div class="best-section">
+                <span class="best-label">BEST</span>
+                <div><span class="best-value" id="highScoreDisplay">0</span><span class="best-badge">★ NEW</span></div>
+            </div>
+            <button id="restartBtn">PLAY AGAIN</button>
+        </div>
+    </div>
+</div>
+<script>
+// =====================================================
+// TOWER STACK — A Tower Bloxx-inspired stacking game
+// Play at https://nkyang10.github.io/tower-stack
+// =====================================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// --- Logical resolution ---
+const W = 360, H = 640;
+canvas.width = W;
+canvas.height = H;
+
+// --- Constants ---
+const BLOCK_H     = 28;
+const BASE_W      = 130;
+const SWING_GAP   = 110;
+const DROP_SPEED  = 14;
+const MARGIN      = 6;
+const MIN_OVERLAP = 5;
+
+const COLORS = [
+    '#FF6B6B','#FECA57','#48DBFB','#FF9FF3',
+    '#54A0FF','#5F27CD','#01A3A4','#F368E0',
+    '#FF6348','#2ED573','#1E90FF','#FF4757',
+    '#FFC312','#C4E538','#FDA7DF','#ED4C67',
+    '#0ABDE3','#6AB04C','#E056A0','#22a6b3',
+];
+
+// --- Utility ---
+function lerp(a,b,t){return a+(b-a)*t}
+function rand(a,b){return Math.random()*(b-a)+a}
+function randInt(a,b){return Math.floor(rand(a,b))}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+
+function shade(hex,dl){
+    let r=parseInt(hex.slice(1,3),16);
+    let g=parseInt(hex.slice(3,5),16);
+    let b=parseInt(hex.slice(5,7),16);
+    r=clamp(r+dl,0,255);
+    g=clamp(g+dl,0,255);
+    b=clamp(b+dl,0,255);
+    return `rgb(${r},${g},${b})`;
+}
+
+function roundRect(ctx,x,y,w,h,r){
+    if(w<=0||h<=0)return;
+    r=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+}
+
+// --- Game state ---
+const g = {
+    tower:[],
+    swinging:null,
+    dropping:null,
+    cameraY:0,
+    targetCamY:0,
+    score:0,
+    state:'playing',     // playing | dropping | falling | gameover
+    swingSpeed:2.8,
+    swingDir:1,
+    colorIdx:0,
+    particles:[],
+    shakeX:0,
+    shakeY:0,
+    shakeIntensity:0,
+    buildings:[],
+    stars:[],
+    perfectFlash:0,
+    combo:0,
+    highScore:parseInt(localStorage.getItem('towerStackHS')||'0'),
+    isNewHS:false,
+};
+
+function nextColor(){
+    const c=COLORS[g.colorIdx%COLORS.length];
+    g.colorIdx++;
+    return c;
+}
+
+function spawnParticles(x,y,color,count){
+    for(let i=0;i<count;i++){
+        const angle=rand(0,Math.PI*2);
+        const speed=rand(1.5,5);
+        g.particles.push({
+            x,y,
+            vx:Math.cos(angle)*speed,
+            vy:Math.sin(angle)*speed-2,
+            size:rand(2,5),
+            life:randInt(20,45),
+            maxLife:45,
+            color,
+        });
+    }
+}
+
+// --- Background decoration ---
+function generateStars(){
+    g.stars=[];
+    for(let i=0;i<100;i++){
+        g.stars.push({
+            x:rand(0,W),
+            y:rand(0,H*0.55),
+            r:rand(0.5,2),
+            twinkle:rand(0.015,0.07),
+            phase:rand(0,Math.PI*2),
+        });
+    }
+}
+
+function generateBuildings(){
+    g.buildings=[];
+    let x=-5;
+    while(x<W+10){
+        const bw=randInt(12,45);
+        const bh=randInt(20,100);
+        g.buildings.push({x,bw,bh});
+        x+=bw+randInt(1,5);
+    }
+}
+
+// --- Initialisation ---
+function init(){
+    g.tower=[];
+    g.score=0;
+    g.state='playing';
+    g.cameraY=0;
+    g.targetCamY=0;
+    g.swingSpeed=2.8;
+    g.swingDir=1;
+    g.colorIdx=0;
+    g.particles=[];
+    g.shakeIntensity=0;
+    g.shakeX=0;
+    g.shakeY=0;
+    g.perfectFlash=0;
+    g.combo=0;
+    g.isNewHS=false;
+    document.getElementById('overlay').classList.remove('visible');
+
+    // Base block
+    const bx=(W-BASE_W)/2;
+    g.tower.push({
+        x:bx, y:H-90,
+        w:BASE_W, h:BLOCK_H,
+        color:'#34495e',
+    });
+
+    if(g.buildings.length===0) generateBuildings();
+    if(g.stars.length===0) generateStars();
+
+    spawnSwinging();
+}
+
+// --- Spawn next swinging block ---
+function spawnSwinging(){
+    const top=g.tower[g.tower.length-1];
+    // The swinging block matches the tower top width
+    g.swinging={
+        x:top.x,                         // start aligned with tower
+        y:top.y-BLOCK_H-SWING_GAP,       // above the tower
+        w:top.w,                         // matches tower width
+        h:BLOCK_H,
+        color:nextColor(),
+    };
+}
+
+// --- Drop current block ---
+function dropBlock(){
+    if(g.state!=='playing'||!g.swinging)return;
+    g.state='dropping';
+    g.dropping={
+        x:g.swinging.x,
+        y:g.swinging.y,
+        w:g.swinging.w,
+        h:g.swinging.h,
+        color:g.swinging.color,
+    };
+    g.swinging=null;
+}
+
+// --- Landing logic ---
+function handleLanding(){
+    const top=g.tower[g.tower.length-1];
+    const d=g.dropping;
+    if(!d){g.state='playing';spawnSwinging();return;}
+
+    // Horizontal overlap
+    const left=Math.max(d.x,top.x);
+    const right=Math.min(d.x+d.w,top.x+top.w);
+    const overlap=right-left;
+
+    // Too small overlap → miss, block keeps falling
+    if(overlap<MIN_OVERLAP){
+        g.state='falling';
+        return;
+    }
+
+    // Perfect placement (within 2px)
+    const perfect=Math.abs(d.x-top.x)<2;
+
+    // Create new tower block from the overlap zone
+    const nb={
+        x:left,
+        y:top.y-BLOCK_H,
+        w:overlap,
+        h:BLOCK_H,
+        color:d.color,
+    };
+    g.tower.push(nb);
+    g.score++;
+
+    // Effects
+    if(perfect){
+        g.perfectFlash=20;
+        g.combo++;
+        spawnParticles(nb.x+nb.w/2,nb.y+nb.h,nb.color,25);
+    }else{
+        g.combo=0;
+        spawnParticles(nb.x+nb.w/2,nb.y+nb.h,nb.color,10);
+    }
+
+    g.shakeIntensity=Math.max(g.shakeIntensity,perfect?10:5);
+
+    // Increase swing speed gradually
+    g.swingSpeed=Math.min(2.8+g.score*0.025,6.5);
+
+    g.dropping=null;
+    g.state='playing';
+    spawnSwinging();
+}
+
+// --- Update ---
+function update(){
+    if(g.state==='gameover')return;
+
+    // Swinging block
+    if(g.state==='playing'&&g.swinging){
+        g.swinging.x+=g.swingSpeed*g.swingDir;
+        if(g.swinging.x+g.swinging.w>W-MARGIN) g.swingDir=-1;
+        if(g.swinging.x<MARGIN) g.swingDir=1;
+    }
+
+    // Dropping / falling block
+    if((g.state==='dropping'||g.state==='falling')&&g.dropping){
+        g.dropping.y+=DROP_SPEED;
+
+        if(g.state==='dropping'){
+            const top=g.tower[g.tower.length-1];
+            if(g.dropping.y+g.dropping.h>=top.y){
+                g.dropping.y=top.y-g.dropping.h; // snap
+                handleLanding();
+            }
+        }
+
+        if(g.state==='falling'&&g.dropping.y>H+80){
+            g.state='gameover';
+            g.dropping=null;
+            showGameOver();
+        }
+    }
+
+    // Smooth camera
+    if(g.tower.length>0){
+        const top=g.tower[g.tower.length-1];
+        g.targetCamY=Math.max(0,top.y-380);
+    }
+    g.cameraY=lerp(g.cameraY,g.targetCamY,0.08);
+
+    // Perfect flash timer
+    if(g.perfectFlash>0) g.perfectFlash--;
+
+    // Particles
+    for(let i=g.particles.length-1;i>=0;i--){
+        const p=g.particles[i];
+        p.x+=p.vx;
+        p.y+=p.vy;
+        p.vy+=0.2;
+        p.life--;
+        if(p.life<=0) g.particles.splice(i,1);
+    }
+
+    // Screen shake
+    if(g.shakeIntensity>0.5){
+        g.shakeX=(Math.random()-0.5)*g.shakeIntensity*2;
+        g.shakeY=(Math.random()-0.5)*g.shakeIntensity*2;
+        g.shakeIntensity*=0.88;
+    }else{
+        g.shakeIntensity=0;
+        g.shakeX=0;
+        g.shakeY=0;
+    }
+}
+
+// =====================================================
+// DRAWING
+// =====================================================
+
+function draw(){
+    ctx.save();
+    ctx.translate(g.shakeX,g.shakeY);
+    drawBackground();
+    drawTower();
+    if(g.swinging) drawSwinging();
+    if(g.dropping) drawDropping();
+    drawParticles();
+    drawHUD();
+    ctx.restore();
+}
+
+function drawBackground(){
+    // Sky gradient
+    const grad=ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'#0f0c29');
+    grad.addColorStop(0.25,'#1a1a4e');
+    grad.addColorStop(0.55,'#2d3561');
+    grad.addColorStop(0.8,'#4a6fa5');
+    grad.addColorStop(1,'#6b93c0');
+    ctx.fillStyle=grad;
+    ctx.fillRect(0,0,W,H);
+
+    // Stars
+    const t=Date.now()/1000;
+    for(const s of g.stars){
+        const alpha=0.4+0.6*Math.abs(Math.sin(t*s.twinkle+s.phase));
+        ctx.beginPath();
+        ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(255,255,255,${alpha.toFixed(3)})`;
+        ctx.fill();
+    }
+
+    // City silhouette
+    ctx.fillStyle='#0a0a1e';
+    for(const b of g.buildings){
+        const by=H-b.bh;
+        ctx.fillRect(b.x,by,b.bw,b.bh);
+        // Random window glows
+        for(let i=0;i<Math.floor(b.bw/9);i++){
+            if(Math.random()>0.25)continue;
+            ctx.fillStyle=`rgba(255,200,100,${rand(0.04,0.12).toFixed(3)})`;
+            ctx.fillRect(b.x+3+i*((b.bw-6)/Math.floor(b.bw/9)),by+4+randInt(0,2)*8,4,4);
+        }
+    }
+
+    // Horizon glow
+    const glow=ctx.createRadialGradient(W/2,H-20,10,W/2,H-20,120);
+    glow.addColorStop(0,'rgba(100,150,220,0.10)');
+    glow.addColorStop(1,'rgba(100,150,220,0)');
+    ctx.fillStyle=glow;
+    ctx.fillRect(0,H-60,W,60);
+
+    // Ground line
+    ctx.strokeStyle='rgba(255,255,255,0.06)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(0,H-0.5);
+    ctx.lineTo(W,H-0.5);
+    ctx.stroke();
+}
+
+function drawBlock(block,sy){
+    const x=block.x, y=sy, w=block.w, h=block.h;
+    if(w<=0)return;
+
+    // Drop shadow
+    ctx.shadowColor='rgba(0,0,0,0.35)';
+    ctx.shadowBlur=12;
+    ctx.shadowOffsetY=4;
+
+    // Main body
+    roundRect(ctx,x,y,w,h,4);
+    ctx.fillStyle=block.color;
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor='transparent';
+    ctx.shadowBlur=0;
+    ctx.shadowOffsetY=0;
+
+    // Top highlight bar
+    roundRect(ctx,x+4,y+2,w-8,5,2);
+    ctx.fillStyle='rgba(255,255,255,0.2)';
+    ctx.fill();
+
+    // Bottom shadow bar
+    roundRect(ctx,x+4,y+h-6,w-8,4,2);
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.fill();
+
+    // Left edge highlight
+    roundRect(ctx,x+2,y+5,3,h-10,1);
+    ctx.fillStyle='rgba(255,255,255,0.12)';
+    ctx.fill();
+
+    // Right edge shadow
+    roundRect(ctx,x+w-5,y+5,3,h-10,1);
+    ctx.fillStyle='rgba(0,0,0,0.12)';
+    ctx.fill();
+}
+
+function drawTower(){
+    for(const b of g.tower){
+        const by=b.y-g.cameraY;
+        if(by<-BLOCK_H*2||by>H+10)continue;
+        drawBlock(b,by);
+    }
+}
+
+function drawSwinging(){
+    const s=g.swinging;
+    if(!s)return;
+    const sy=s.y-g.cameraY;
+    drawBlock(s,sy);
+
+    // Drop indicator — small arrow above block
+    const cx=s.x+s.w/2;
+    ctx.fillStyle='rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(cx-5,sy-12);
+    ctx.lineTo(cx+5,sy-12);
+    ctx.lineTo(cx,sy-6);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawDropping(){
+    const d=g.dropping;
+    if(!d)return;
+    drawBlock(d,d.y-g.cameraY);
+}
+
+function drawParticles(){
+    for(const p of g.particles){
+        const alpha=p.life/p.maxLife;
+        ctx.globalAlpha=alpha;
+        ctx.fillStyle=p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+    }
+    ctx.globalAlpha=1;
+}
+
+function drawHUD(){
+    // Score pill at top
+    const txt=String(g.score);
+    ctx.textAlign='center';
+    ctx.textBaseline='top';
+    const tw=ctx.measureText(txt).width+30;
+    const ph=32;
+    const px=(W-tw)/2, py=14;
+    roundRect(ctx,px,py,tw,ph,16);
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.fill();
+
+    ctx.font='bold 18px "Segoe UI",system-ui,sans-serif';
+    ctx.fillStyle='#fff';
+    ctx.fillText(txt,W/2,py+7);
+
+    // Combo
+    if(g.combo>=2){
+        ctx.font='bold 12px "Segoe UI",system-ui,sans-serif';
+        ctx.fillStyle='#FECA57';
+        ctx.fillText(`🔥 ${g.combo}x`,W/2,py+ph+6);
+    }
+
+    // Tap hint (first 2 blocks)
+    if(g.score<2&&g.state==='playing'){
+        ctx.font='14px "Segoe UI",system-ui,sans-serif';
+        ctx.fillStyle='rgba(255,255,255,0.3)';
+        ctx.fillText('Tap to drop',W/2,H-55);
+        const pulse=Math.abs(Math.sin(Date.now()/350))*0.5+0.5;
+        ctx.globalAlpha=pulse*0.4;
+        ctx.beginPath();
+        ctx.moveTo(W/2-7,H-40);
+        ctx.lineTo(W/2+7,H-40);
+        ctx.lineTo(W/2,H-33);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha=1;
+    }
+
+    // Perfect! flash
+    if(g.perfectFlash>0){
+        const a=Math.min(1,g.perfectFlash/15);
+        ctx.globalAlpha=a*0.85;
+        ctx.font='bold 26px "Segoe UI",system-ui,sans-serif';
+        ctx.textBaseline='middle';
+        ctx.fillStyle='#FECA57';
+        ctx.fillText('PERFECT!',W/2,H/2-40);
+        ctx.globalAlpha=1;
+    }
+
+    // Direction indicators for swinging block
+    if(g.state==='playing'&&g.swinging){
+        const s=g.swinging;
+        const sy=s.y-g.cameraY;
+        if(sy>0&&sy<H){
+            if(g.swingDir>0&&s.x+s.w>W-MARGIN-8){
+                ctx.fillStyle='rgba(255,255,255,0.12)';
+                ctx.beginPath();
+                ctx.moveTo(12,sy+s.h/2-5);
+                ctx.lineTo(20,sy+s.h/2);
+                ctx.lineTo(12,sy+s.h/2+5);
+                ctx.closePath();
+                ctx.fill();
+            }
+            if(g.swingDir<0&&s.x<MARGIN+8){
+                ctx.fillStyle='rgba(255,255,255,0.12)';
+                ctx.beginPath();
+                ctx.moveTo(W-12,sy+s.h/2-5);
+                ctx.lineTo(W-20,sy+s.h/2);
+                ctx.lineTo(W-12,sy+s.h/2+5);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+    }
+}
+
+// =====================================================
+// GAME OVER
+// =====================================================
+
+function showGameOver(){
+    document.getElementById('finalScore').textContent=g.score;
+    document.getElementById('highScoreDisplay').textContent=g.highScore;
+
+    const badge=document.querySelector('.best-badge');
+    if(g.score>g.highScore){
+        g.highScore=g.score;
+        localStorage.setItem('towerStackHS',String(g.highScore));
+        g.isNewHS=true;
+        badge.style.display='inline-block';
+    }else{
+        badge.style.display='none';
+    }
+
+    setTimeout(()=>{
+        document.getElementById('overlay').classList.add('visible');
+    },600);
+}
+
+function restartGame(){
+    document.getElementById('overlay').classList.remove('visible');
+    init();
+}
+
+// =====================================================
+// INPUT
+// =====================================================
+
+function handlePointer(e){
+    if(g.state==='gameover')return;
+    e.preventDefault();
+    if(g.state==='playing')dropBlock();
+}
+
+canvas.addEventListener('click',handlePointer);
+canvas.addEventListener('touchstart',handlePointer,{passive:false});
+
+document.getElementById('restartBtn').addEventListener('click',restartGame);
+document.getElementById('restartBtn').addEventListener('touchstart',e=>{
+    e.stopPropagation();
+    restartGame();
+},{passive:false});
+
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Keyboard (Space / Enter)
+document.addEventListener('keydown',e=>{
+    if(e.code==='Space'||e.code==='Enter'){
+        e.preventDefault();
+        if(document.getElementById('overlay').classList.contains('visible')){
+            restartGame();
+        }else if(g.state==='playing'){
+            dropBlock();
+        }
+    }
+});
+
+// =====================================================
+// START & LOOP
+// =====================================================
+
+init();
+function gameLoop(){
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
