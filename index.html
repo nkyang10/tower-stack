@@ -211,22 +211,19 @@ function init(){
 // ================================================================
 function spawnSwinging(){
     const top=g.tower[g.tower.length-1];
-    const craneBaseX=W/2;               // crane pivot at screen center
-    const craneBaseY=20;                 // crane at top of screen
-    const armLen=220;                    // how far the arm reaches down
-    // Crane swings side-to-side. The block hangs at the end of the arm.
-    // Convert craneAngle (radians) to horizontal offset
-    const cx=Math.sin(g.craneAngle)*160; // max ±160px swing
-    const cy=armLen;                      // arm length below pivot
+    // Maintain minimum distance between block and tower top
+    const blockY=Math.max(top.y-BLOCK_H-SWING_GAP, 10);
+    const pivotY=Math.max(4, blockY+BLOCK_H/2-220);
+    const cx=Math.sin(g.craneAngle)*160;
 
     g.swinging={
-        x:craneBaseX+cx-TOWER_W/2,       // block x (top-left)
-        y:craneBaseY+cy-BLOCK_H/2,       // block y (top-left)
+        x:W/2+cx-TOWER_W/2,
+        y:blockY,
         w:TOWER_W,h:BLOCK_H,color:nextColor(),
-        // For drawing the crane
-        pivotX:craneBaseX,pivotY:craneBaseY,
-        hangX:craneBaseX+cx,
-        hangY:craneBaseY+cy,
+        pivotX:W/2,
+        pivotY:pivotY,
+        hangX:W/2+cx,
+        hangY:blockY+BLOCK_H/2,
     };
 }
 
@@ -380,7 +377,8 @@ function update(){
         const cx=Math.sin(g.craneAngle)*160;
         g.swinging.x=W/2+cx-TOWER_W/2;
         g.swinging.hangX=W/2+cx;
-        g.swinging.hangY=20+220;
+        // hangY stays at block center (set in spawnSwinging)
+        g.swinging.pivotY=Math.max(4, g.swinging.y+BLOCK_H/2-220);
     }
 
     // Dropping / falling
