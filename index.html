@@ -348,9 +348,13 @@ function init(){
 
 function spawnSwinging(){
     const top=g.tower[g.tower.length-1];
+    // Random block width each time (40px to BASE_W) for variety
+    const rw=Math.max(40,Math.min(BASE_W,randInt(40,BASE_W+1)));
+    // Center the random-width block over the tower top
+    const rx=top.x+(top.w-rw)/2;
     g.swinging={
-        x:top.x,y:top.y-BLOCK_H-SWING_GAP,
-        w:top.w,h:BLOCK_H,color:nextColor(),
+        x:rx,y:top.y-BLOCK_H-SWING_GAP,
+        w:rw,h:BLOCK_H,color:nextColor(),
     };
 }
 
@@ -811,7 +815,10 @@ function restartGame(){
 // INPUT
 // ================================================================
 function handlePointer(e){
-    if(g.state==='gameover')return;
+    if(g.state==='gameover'){
+        restartGame();
+        return;
+    }
     e.preventDefault();
     if(g.state==='playing')dropBlock();
 }
@@ -827,6 +834,11 @@ document.getElementById('scYes').addEventListener('touchstart',e=>{e.stopPropaga
 document.getElementById('scNo').addEventListener('touchstart',e=>{e.stopPropagation();declineSecondChance()},{passive:false});
 
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Tap anywhere on overlay background to restart
+document.getElementById('overlay').addEventListener('click',function(e){
+    if(!e.target.closest('#restartBtn'))restartGame();
+});
 
 // Keyboard
 document.addEventListener('keydown',e=>{
